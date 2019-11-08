@@ -3,6 +3,8 @@
 
 #include "fsl_gpio_driver.h"
 
+#define SPI_CLK_GPIO HW_GPIOB
+
 /*
  *	On Warp, these are the alternative functions we have chosen:
  *
