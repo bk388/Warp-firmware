@@ -8,8 +8,8 @@
 #include "warp.h"
 #include "devSSD1331.h"
 
-volatile uint8_t	inBuffer[1];
-volatile uint8_t	payloadBytes[1];
+volatile uint8_t	inBuffer[32];
+volatile uint8_t	payloadBytes[32];
 
 
 /*
@@ -17,13 +17,11 @@ volatile uint8_t	payloadBytes[1];
  */
 enum
 {
-	kSSD1331PinMOSI		= GPIO_MAKE_PIN(HW_GPIOA, 7),
-	//kSSD1331PinSCK		= GPIO_MAKE_PIN(HW_GPIOA, 9),
-	kSSD1331PinSCK		= GPIO_MAKE_PIN(HW_GPIOB, 0),
-	kSSD1331PinCSn		= GPIO_MAKE_PIN(HW_GPIOB, 13),
-	kSSD1331PinDC		= GPIO_MAKE_PIN(HW_GPIOA, 12),
-	//kSSD1331PinRST		= GPIO_MAKE_PIN(HW_GPIOB, 0),
-	kSSD1331PinRST		= GPIO_MAKE_PIN(HW_GPIOA, 9),
+	kSSD1331PinMOSI         = GPIO_MAKE_PIN(HW_GPIOA, 8),
+	kSSD1331PinSCK          = GPIO_MAKE_PIN(HW_GPIOA, 9),
+	kSSD1331PinCSn          = GPIO_MAKE_PIN(HW_GPIOA, 12),
+	kSSD1331PinDC           = GPIO_MAKE_PIN(HW_GPIOB, 13),
+	kSSD1331PinRST          = GPIO_MAKE_PIN(HW_GPIOA, 2),
 };
 
 static int
