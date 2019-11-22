@@ -14,16 +14,29 @@
 #include "SEGGER_RTT.h"
 #include "warp.h"
 
-extern volatile WarpI2CDeviceState      deviceINA219State;
-extern volatile uint32_t                gWarpI2cBaudRateKbps;
-extern volatile uint32_t                gWarpI2cTimeoutMilliseconds;
-extern volatile uint32_t                gWarpSupplySettlingDelayMilliseconds;
+
+extern volatile WarpI2CDeviceState	deviceINA219State;
+extern volatile uint32_t		gWarpI2cBaudRateKbps;
+
+
+
+void
+initINA219(const uint8_t i2cAddress, WarpI2CDeviceState volatile *  deviceStatePointer)
+{
+	SEGGER_RTT_WriteString(0, "\rinitINA219 function start\n");
+	deviceStatePointer->i2cAddress	= i2cAddress;
+
+	return;
+}
 
 WarpStatus
-writeINA219Register(uint8_t reg, uint16_t value)
+writeSensorRegisterINA219(uint8_t deviceRegister, uint16_t value)
 {
-	uint8_t         payloadByte[2], commandByte[1];
-	i2c_status_t    status;
+	uint8_t highBits = value >> 8;
+	uint8_t lowBits = value & 0xFF;
+	uint8_t payloadByte[2] = {highBits, lowBits};
+	uint8_t commandByte[1]	= {0xFF};
+	i2c_status_t	status;
 
 	i2c_device_t slave =
 	{
@@ -31,103 +44,53 @@ writeINA219Register(uint8_t reg, uint16_t value)
 		.baudRate_kbps = gWarpI2cBaudRateKbps
 	};
 
-	commandByte[0] = reg;
-	payloadByte[0] = (uint8_t)((value >> 8) & 0xFF);
-	payloadByte[1] = (uint8_t)(value & 0xFF);
-        status = I2C_DRV_MasterSendDataBlocking(
-                                                        0 /* I2C instance */,
-                                                        &slave,
-                                                        commandByte,
-                                                        1,
-                                                        payloadByte,
-                                                        2,
-                                                        gWarpI2cTimeoutMilliseconds);
-        if (status != kStatus_I2C_Success)
-        {
-                return kWarpStatusDeviceCommunicationFailed;
-        }
+	commandByte[0] = deviceRegister;
 
-        return kWarpStatusOK;
+	status = I2C_DRV_MasterSendDataBlocking(
+						0,
+						&slave,
+						commandByte,
+						1,
+						payloadByte,
+						2,
+						100);
+	if (status != kStatus_I2C_Success)
+	{
+		return kWarpStatusDeviceCommunicationFailed;
+	}
+
+	return kWarpStatusOK;
 }
+
+
 
 WarpStatus
-readINA219Register(uint8_t reg)
+readSensorRegisterINA219(uint8_t deviceRegister, int numberOfBytes)
 {
-        uint8_t         cmdBuf[1] = {0xFF};
-        i2c_status_t    status;
-	
-	//USED(numberOfBytes);
-        i2c_device_t slave =
-        {
-                .address = deviceINA219State.i2cAddress,
-                .baudRate_kbps = gWarpI2cBaudRateKbps
-        };
-	cmdBuf[0] = reg;
-        status = I2C_DRV_MasterReceiveDataBlocking(
-                                                        0 /* I2C peripheral instance */,
-                                                        &slave,
-                                                        cmdBuf,
-                                                        1,
-                                                        (uint8_t *)deviceINA219State.i2cBuffer,
-                                                        2,
-                                                        gWarpI2cTimeoutMilliseconds);
+	uint8_t		cmdBuf[1] = {0xFF};
+	i2c_status_t	status;
+	USED(numberOfBytes);
 
-        if (status != kStatus_I2C_Success)
-        {
-                return kWarpStatusDeviceCommunicationFailed;
-        }
+	i2c_device_t slave =
+	{
+		.address = deviceINA219State.i2cAddress,
+		.baudRate_kbps = gWarpI2cBaudRateKbps
+	};
 
-        return kWarpStatusOK;
+	cmdBuf[0] = deviceRegister;
 
-}
+	status = I2C_DRV_MasterReceiveDataBlocking(
+							0,
+							&slave,
+							cmdBuf,
+							1,
+							(uint8_t *)deviceINA219State.i2cBuffer,
+							numberOfBytes,
+							500);
+	if (status != kStatus_I2C_Success)
+	{
+		return kWarpStatusDeviceCommunicationFailed;
+	}
 
-void
-initINA219(const uint8_t i2cAddress, WarpI2CDeviceState volatile *  deviceStatePointer)
-{
-	deviceStatePointer->i2cAddress  = i2cAddress;
-	deviceStatePointer->signalType  = ( 0xffffffff );
-
-        return;
-}
-
-WarpStatus
-calibrateINA219()
-{
-	WarpStatus      i2cWriteStatus1;
-	i2cWriteStatus1 = writeINA219Register(0x05, (uint16_t)8192);
-	return i2cWriteStatus1;
-}
-
-WarpStatus
-configureSensorINA219()
-{
-	WarpStatus      i2cWriteStatus1, i2cWriteStatus2;
-	/*
-	16V, 400mA
-	ina219_calValue = 8192;
-	ina219_currentDivider_mA = 20;
-	ina219_powerMultiplier_mW = 1.0f;
-	*/
-	i2cWriteStatus1 = writeINA219Register(0x05, (uint16_t)8192);
-	i2cWriteStatus2 = writeINA219Register(0x00, 0x019f);
-	return (i2cWriteStatus1 | i2cWriteStatus2);
-}
-
-WarpStatus
-readCurrentRegisterINA219()
-{
-	WarpStatus      i2cWriteStatus1, i2cWriteStatus2;
-	i2cWriteStatus1 = calibrateINA219();
-	i2cWriteStatus2 = readINA219Register(0x04);
-	return (i2cWriteStatus1 | i2cWriteStatus2);
-}
-
-void
-printCurrentINA219()
-{
-	uint16_t readRegValue = 0;
-	readCurrentRegisterINA219();
-	readRegValue = deviceINA219State.i2cBuffer[0]<<8 | deviceINA219State.i2cBuffer[1];
-	SEGGER_RTT_printf(0, "Current register = 0x%04x,", readRegValue);
-	return;
+	return kWarpStatusOK;
 }

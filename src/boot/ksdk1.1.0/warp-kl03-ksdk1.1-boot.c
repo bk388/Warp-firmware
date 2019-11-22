@@ -61,15 +61,15 @@
 *	Comment out the header file to disable devices
 */
 #ifndef WARP_FRDMKL03
-//#	include "devBMX055.h"
+#	include "devBMX055.h"
 #	include "devMMA8451Q.h"
-#	include "devIANA294.h"
 #	include "devHDC1000.h"
 #	include "devMAG3110.h"
-//#	include "devL3GD20H.h"
-//#	include "devBME680.h"
-//#	include "devCCS811.h"
-//#	include "devAMG8834.h"
+#	include "devL3GD20H.h"
+#	include "devBME680.h"
+#	include "devCCS811.h"
+#	include "devAMG8834.h"
+#	include "devSSD1331.h"
 //#include "devTCS34725.h"
 //#include "devSI4705.h"
 //#include "devSI7021.h"
@@ -80,10 +80,10 @@
 //#include "devAS7263.h"
 //#include "devRV8803C7.h"
 #else
-#	include "devMMA8451Q.h"
-#	include "devIANA294.h"
-#	include "devSSD1331.h"
+//	#include "devMMA8451Q.h"
 #endif
+
+#include "devINA219.h"
 
 #define WARP_BUILD_ENABLE_SEGGER_RTT_PRINTF
 //#define WARP_BUILD_BOOT_TO_CSVSTREAM
@@ -114,9 +114,7 @@ volatile WarpI2CDeviceState			deviceBMX055magState;
 volatile WarpI2CDeviceState			deviceMMA8451QState;
 #endif
 
-#ifdef WARP_BUILD_ENABLE_DEVINA219
 volatile WarpI2CDeviceState			deviceINA219State;
-#endif
 
 #ifdef WARP_BUILD_ENABLE_DEVLPS25H
 volatile WarpI2CDeviceState			deviceLPS25HState;
@@ -219,6 +217,7 @@ void					powerupAllSensors(void);
 uint8_t					readHexByte(void);
 int					read4digits(void);
 void					printAllSensors(bool printHeadersAndCalibration, bool hexModeFlag, int menuDelayBetweenEachRun, int i2cPullupValue);
+
 
 
 /*
@@ -1017,6 +1016,135 @@ checkSum(uint8_t *  pointer, uint16_t length) /*	Adapted from https://stackoverf
 }
 #endif
 
+
+/* Modified function of loopForSensor for INA219 only */
+void loopForINA219(	const char *  tagString,
+		WarpStatus  (* readSensorRegisterFunction)(uint8_t deviceRegister, int numberOfBytes),
+		volatile WarpI2CDeviceState *  i2cDeviceState,
+		volatile WarpSPIDeviceState *  spiDeviceState,
+		uint8_t  baseAddress,
+		uint8_t  minAddress,
+		uint8_t  maxAddress,
+		int  repetitionsPerAddress,
+		int  chunkReadsPerAddress,
+		int  spinDelay,
+		bool  autoIncrement,
+		uint16_t  sssupplyMillivolts,
+		uint8_t  referenceByte,
+		uint16_t adaptiveSssupplyMaxMillivolts,
+		bool  chatty
+		)
+{
+	WarpStatus		status;
+	uint8_t			address = min(minAddress, baseAddress);
+	int			readCount = repetitionsPerAddress + 1;
+	int			nSuccesses = 0;
+	int			nFailures = 0;
+	int			nCorrects = 0;
+	int			nBadCommands = 0;
+	uint16_t		actualSssupplyMillivolts = sssupplyMillivolts;
+
+
+	if (	(!spiDeviceState && !i2cDeviceState) ||
+		(spiDeviceState && i2cDeviceState) )
+	{
+#ifdef WARP_BUILD_ENABLE_SEGGER_RTT_PRINTF
+		SEGGER_RTT_printf(0, RTT_CTRL_RESET RTT_CTRL_BG_BRIGHT_YELLOW RTT_CTRL_TEXT_BRIGHT_WHITE kWarpConstantStringErrorSanity RTT_CTRL_RESET "\n");
+#endif
+	}
+
+	enableSssupply(actualSssupplyMillivolts);
+	OSA_TimeDelay(100);
+
+	SEGGER_RTT_WriteString(0, tagString);
+
+	SEGGER_RTT_WriteString(0, "\rINA219 calibration start\n");
+	writeSensorRegisterINA219(0x05, 4096);
+
+	SEGGER_RTT_WriteString(0, "\rINA219 sensor read start\n");
+	for (int i = 0; i < 1000; i++)
+	{
+		/*
+		 *	Keep on repeating until we are above the maxAddress, or just once if not autoIncrement-ing
+		 *	This is checked for at the tail end of the loop.
+		 */
+		while (true)
+		{
+			for (int i = 0; i < readCount; i++) for (int j = 0; j < chunkReadsPerAddress; j++)
+			{
+				status = readSensorRegisterFunction(address+j, 2 /* numberOfBytes */);
+				if (status == kWarpStatusOK)
+				{
+					nSuccesses++;
+					if (actualSssupplyMillivolts > sssupplyMillivolts)
+					{
+						actualSssupplyMillivolts -= 100;
+						enableSssupply(actualSssupplyMillivolts);
+					}
+					if (address == 0x04) {
+						int val = ((i2cDeviceState->i2cBuffer[0] << 8) | i2cDeviceState->i2cBuffer[1]);
+						SEGGER_RTT_printf(0, "\r\t0x%02x --> %d\n", address+j, val);
+					}
+					OSA_TimeDelay(10);
+				}
+				else if (status == kWarpStatusDeviceCommunicationFailed)
+				{
+#ifdef WARP_BUILD_ENABLE_SEGGER_RTT_PRINTF
+					SEGGER_RTT_printf(0, "\r\t0x%02x --> ----\n",
+						address+j);
+#endif
+
+					nFailures++;
+					if (actualSssupplyMillivolts < adaptiveSssupplyMaxMillivolts)
+					{
+						actualSssupplyMillivolts += 100;
+						enableSssupply(actualSssupplyMillivolts);
+					}
+				}
+				else if (status == kWarpStatusBadDeviceCommand)
+				{
+					nBadCommands++;
+				}
+
+				if (spinDelay > 0)
+				{
+					OSA_TimeDelay(spinDelay);
+				}
+			}
+
+			if (autoIncrement)
+			{
+				address++;
+			}
+
+			if (address > maxAddress || !autoIncrement)
+			{
+				/*
+				 *	We either iterated over all possible addresses, or were asked to do only
+				 *	one address anyway (i.e. don't increment), so we're done.
+				 */
+				break;
+			}
+		}
+
+		address = 0x00;
+	}
+
+	/*
+	 *	We intersperse RTT_printfs with forced delays to allow us to use small
+	 *	print buffers even in RUN mode.
+	 */
+#ifdef WARP_BUILD_ENABLE_SEGGER_RTT_PRINTF
+	SEGGER_RTT_printf(0, "\r\n\t%d/%d success rate.\n", nSuccesses, (nSuccesses + nFailures));
+	OSA_TimeDelay(50);
+	SEGGER_RTT_printf(0, "\r\t%d bad commands.\n\n", nBadCommands);
+	OSA_TimeDelay(50);
+#endif
+
+	return;
+}
+
+
 int
 main(void)
 {
@@ -1243,11 +1371,8 @@ main(void)
 
 #ifdef WARP_BUILD_ENABLE_DEVMMA8451Q
 	initMMA8451Q(	0x1D	/* i2cAddress */,	&deviceMMA8451QState	);
-#endif	
-
-#ifdef WARP_BUILD_ENABLE_DEVINA219
+#endif
 	initINA219(	0x40	/* i2cAddress */,	&deviceINA219State	);
-#endif	
 
 #ifdef WARP_BUILD_ENABLE_DEVLPS25H
 	initLPS25H(	0x5C	/* i2cAddress */,	&deviceLPS25HState	);
@@ -1350,9 +1475,33 @@ main(void)
 	 */
 #endif
 
+    // Turn on OLED
+    devSSD1331init();
+    OSA_TimeDelay(1000);
 
-	devSSD1331init();
+    // Measure Current
+	enableI2Cpins(menuI2cPullupValue);
 
+    loopForINA219(	"\r\nINA219:\n\r",		/*	tagString			*/
+					&readSensorRegisterINA219,	/*	readSensorRegisterFunction	*/
+					&deviceINA219State,		/*	i2cDeviceState			*/
+					NULL,				/*	spiDeviceState			*/
+					0x00,			/*	baseAddress			*/
+					0x01,				/*	minAddress			*/
+					0x04,				/*	maxAddress			*/
+					0,		/*	repetitionsPerAddress		*/
+					1,		/*	chunkReadsPerAddress		*/
+					0,			/*	spinDelay			*/
+					1,			/*	autoIncrement			*/
+					1800,		/*	sssupplyMillivolts		*/
+					0,			/*	referenceByte			*/
+					2000,	/*	adaptiveSssupplyMaxMillivolts	*/
+					1				/*	chatty				*/
+					);
+
+
+
+	// Warp firmware
 	while (1)
 	{
 		/*
@@ -1456,9 +1605,6 @@ main(void)
 		SEGGER_RTT_WriteString(0, "\r- 'z': dump all sensors data.\n");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 
-		SEGGER_RTT_WriteString(0, "\r- 'w': measure current.\n");
-		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
-
 		SEGGER_RTT_WriteString(0, "\rEnter selection> ");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 		key = SEGGER_RTT_WaitKey();
@@ -1493,14 +1639,6 @@ main(void)
 				SEGGER_RTT_WriteString(0, "\r\t- '5' MMA8451Q			(0x00--0x31): 1.95V -- 3.6V\n");
 				#else
 				SEGGER_RTT_WriteString(0, "\r\t- '5' MMA8451Q			(0x00--0x31): 1.95V -- 3.6V (compiled out) \n");
-#endif
-				OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
-
-#ifdef WARP_BUILD_ENABLE_DEVINA219
-//TODO just some strings, might not be accurate
-				SEGGER_RTT_WriteString(0, "\r\t- '5' INA219			(0x00--0x31): 1.95V -- 3.6V\n");
-				#else
-				SEGGER_RTT_WriteString(0, "\r\t- '5' INA219			(0x00--0x31): 1.95V -- 3.6V (compiled out) \n");
 #endif
 				OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 
@@ -1745,17 +1883,6 @@ main(void)
 						menuI2cDevice = &deviceAS7263State;
 						break;
 					}
-#endif
-#ifdef WARP_BUILD_ENABLE_DEVINA219
-/* TODO
-					case '5':
-					{
-						menuTargetSensor = kWarpSensorMMA8451Q;
-						menuI2cDevice = &deviceMMA8451QState;
-						break;
-
-					}
-*/
 #endif
 					default:
 					{
@@ -2492,15 +2619,6 @@ main(void)
 
 
 			/*
-			 *	Measure current
-			 */
-			case 'w':
-			{
-				printCurrentINA219();
-				break;
-			}
-			
-			/*
 			 *	Ignore naked returns.
 			 */
 			case '\n':
@@ -2544,9 +2662,6 @@ printAllSensors(bool printHeadersAndCalibration, bool hexModeFlag, int menuDelay
 					0x01,/* Normal read 8bit, 800Hz, normal, active mode */
 					i2cPullupValue
 					);
-	#endif
-	#ifdef WARP_BUILD_ENABLE_DEVINA219
-	numberOfConfigErrors += configureSensorINA219();
 	#endif
 	#ifdef WARP_BUILD_ENABLE_DEVMAG3110
 	numberOfConfigErrors += configureSensorMAG3110(	0x00,/*	Payload: DR 000, OS 00, 80Hz, ADC 1280, Full 16bit, standby mode to set up register*/
@@ -2641,10 +2756,6 @@ printAllSensors(bool printHeadersAndCalibration, bool hexModeFlag, int menuDelay
 
 		#ifdef WARP_BUILD_ENABLE_DEVMMA8451Q
 		SEGGER_RTT_WriteString(0, " MMA8451 x, MMA8451 y, MMA8451 z,");
-		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
-		#endif
-		#ifdef WARP_BUILD_ENABLE_DEVINA219
-		SEGGER_RTT_WriteString(0, " INA219 current,");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 		#endif
 		#ifdef WARP_BUILD_ENABLE_DEVMAG3110

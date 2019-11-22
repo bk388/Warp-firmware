@@ -17,11 +17,11 @@ volatile uint8_t	payloadBytes[32];
  */
 enum
 {
-	kSSD1331PinMOSI         = GPIO_MAKE_PIN(HW_GPIOA, 8),
-	kSSD1331PinSCK          = GPIO_MAKE_PIN(HW_GPIOA, 9),
-	kSSD1331PinCSn          = GPIO_MAKE_PIN(HW_GPIOA, 12),
-	kSSD1331PinDC           = GPIO_MAKE_PIN(HW_GPIOB, 13),
-	kSSD1331PinRST          = GPIO_MAKE_PIN(HW_GPIOA, 2),
+	kSSD1331PinMOSI		= GPIO_MAKE_PIN(HW_GPIOA, 8),
+	kSSD1331PinSCK		= GPIO_MAKE_PIN(HW_GPIOA, 9),
+	kSSD1331PinCSn		= GPIO_MAKE_PIN(HW_GPIOA, 12),
+	kSSD1331PinDC		= GPIO_MAKE_PIN(HW_GPIOB, 13),
+	kSSD1331PinRST		= GPIO_MAKE_PIN(HW_GPIOA, 2),
 };
 
 static int
@@ -134,12 +134,14 @@ devSSD1331init(void)
 	writeCommand(kSSD1331CommandCONTRASTC);		// 0x83
 	writeCommand(0x7D);
 	writeCommand(kSSD1331CommandDISPLAYON);		// Turn on oled panel
+	// SEGGER_RTT_WriteString(0, "\r\n\tDone with initialization sequence...\n");
 
 	/*
 	 *	To use fill commands, you will have to issue a command to the display to enable them. See the manual.
 	 */
 	writeCommand(kSSD1331CommandFILL);
 	writeCommand(0x01);
+	// SEGGER_RTT_WriteString(0, "\r\n\tDone with enabling fill...\n");
 
 	/*
 	 *	Clear Screen
@@ -149,24 +151,30 @@ devSSD1331init(void)
 	writeCommand(0x00);
 	writeCommand(0x5F);
 	writeCommand(0x3F);
+	// SEGGER_RTT_WriteString(0, "\r\n\tDone with screen clear...\n");
 
 
 
 	/*
-	 *	Any post-initialization drawing commands go here.
+	 *	Read the manual for the SSD1331 (SSD1331_1.2.pdf) to figure
+	 *	out how to fill the entire screen with the brightest shade
+	 *	of green.
 	 */
-	writeCommand(kSSD1331CommandDRAWRECT);
-	writeCommand(0x00);
-	writeCommand(0x00);
-	writeCommand(0x5F);
-	writeCommand(0x3F);
-	writeCommand(0x00);
-	writeCommand(0xFF);
-	writeCommand(0x00);
-	writeCommand(0x00);
-	writeCommand(0xFF);
-	writeCommand(0x00);
+    writeCommand(kSSD1331CommandDRAWRECT);
+    writeCommand(0x00); // Column Address of Start
+    writeCommand(0x00); // Row Address of Start
+    writeCommand(0x5F); // Column Address of End
+    writeCommand(0x3F); // Row Address of End
+    writeCommand(0x00); // Color C of the line
+    writeCommand(0xFF); // Color B of the line
+    writeCommand(0x00); // Color A of the line
+    writeCommand(0x00); // Color C of the fill area
+    writeCommand(0xFF); // Color B of the fill area
+    writeCommand(0x00); // Color A of the fill area
 
+
+
+	SEGGER_RTT_WriteString(0, "\r\n\tDone with draw rectangle...\n");
 
 
 
