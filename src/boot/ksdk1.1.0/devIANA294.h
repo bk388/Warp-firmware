@@ -1,6 +1,6 @@
-#ifndef WAROP_BUILD_ENABLE_DEVIANA219
-#define WAROP_BUILD_ENABLE_DEVIANA219
-#endif /* WAROP_BUILD_ENABLE_DEVIANA219 */
+#ifndef WARP_BUILD_ENABLE_DEVIANA219
+#define WARP_BUILD_ENABLE_DEVIANA219
+#endif /* WARP_BUILD_ENABLE_DEVIANA219 */
 
 void initIANA219(const uint8_t i2cAddress, WarpI2CDeviceState volatile *  deviceStatePointer);
 WarpStatus	configureSensorIANA219();
