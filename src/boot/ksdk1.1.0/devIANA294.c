@@ -108,9 +108,16 @@ configureSensorIANA219()
 WarpStatus
 readCurrentRegisterIANA219()
 {
+	WarpStatus      i2cWriteStatus1, i2cWriteStatus2;
+	i2cWriteStatus1 = calibrateIANA219();
+	i2cWriteStatus2 = readIANA219Register(0x04);
+	return (i2cWriteStatus1 | i2cWriteStatus2);
 }
 
 WarpStatus
 calibrateIANA219()
 {
+	WarpStatus      i2cWriteStatus1;
+	i2cWriteStatus1 = writeIANA219Register(0x05, (uint16_t)8192);
+	return i2cWriteStatus1;
 }
