@@ -68,7 +68,7 @@ readIANA219Register(uint8_t reg)
                                                         &slave,
                                                         cmdBuf,
                                                         1,
-                                                        (uint8_t *)deviceMMA8451QState.i2cBuffer,
+                                                        (uint8_t *)deviceIANA219State.i2cBuffer,
                                                         2,
                                                         gWarpI2cTimeoutMilliseconds);
 
@@ -88,6 +88,14 @@ initIANA219(const uint8_t i2cAddress, WarpI2CDeviceState volatile *  deviceState
 	deviceStatePointer->signalType  = ( 0xffffffff );
 
         return;
+}
+
+WarpStatus
+calibrateIANA219()
+{
+	WarpStatus      i2cWriteStatus1;
+	i2cWriteStatus1 = writeIANA219Register(0x05, (uint16_t)8192);
+	return i2cWriteStatus1;
 }
 
 WarpStatus
@@ -114,10 +122,3 @@ readCurrentRegisterIANA219()
 	return (i2cWriteStatus1 | i2cWriteStatus2);
 }
 
-WarpStatus
-calibrateIANA219()
-{
-	WarpStatus      i2cWriteStatus1;
-	i2cWriteStatus1 = writeIANA219Register(0x05, (uint16_t)8192);
-	return i2cWriteStatus1;
-}
