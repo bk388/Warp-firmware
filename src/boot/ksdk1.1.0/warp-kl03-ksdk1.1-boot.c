@@ -114,8 +114,8 @@ volatile WarpI2CDeviceState			deviceBMX055magState;
 volatile WarpI2CDeviceState			deviceMMA8451QState;
 #endif
 
-#ifdef WARP_BUILD_ENABLE_DEVIANA219
-volatile WarpI2CDeviceState			deviceIANA219State;
+#ifdef WARP_BUILD_ENABLE_DEVINA219
+volatile WarpI2CDeviceState			deviceINA219State;
 #endif
 
 #ifdef WARP_BUILD_ENABLE_DEVLPS25H
@@ -1245,8 +1245,8 @@ main(void)
 	initMMA8451Q(	0x1D	/* i2cAddress */,	&deviceMMA8451QState	);
 #endif	
 
-#ifdef WARP_BUILD_ENABLE_DEVIANA219
-	initIANA219(	0x40	/* i2cAddress */,	&deviceIANA219State	);
+#ifdef WARP_BUILD_ENABLE_DEVINA219
+	initINA219(	0x40	/* i2cAddress */,	&deviceINA219State	);
 #endif	
 
 #ifdef WARP_BUILD_ENABLE_DEVLPS25H
@@ -1456,6 +1456,9 @@ main(void)
 		SEGGER_RTT_WriteString(0, "\r- 'z': dump all sensors data.\n");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 
+		SEGGER_RTT_WriteString(0, "\r- 'w': measure current.\n");
+		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
+
 		SEGGER_RTT_WriteString(0, "\rEnter selection> ");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 		key = SEGGER_RTT_WaitKey();
@@ -1493,11 +1496,11 @@ main(void)
 #endif
 				OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 
-#ifdef WARP_BUILD_ENABLE_DEVIANA219
+#ifdef WARP_BUILD_ENABLE_DEVINA219
 //TODO just some strings, might not be accurate
-				SEGGER_RTT_WriteString(0, "\r\t- '5' IANA219			(0x00--0x31): 1.95V -- 3.6V\n");
+				SEGGER_RTT_WriteString(0, "\r\t- '5' INA219			(0x00--0x31): 1.95V -- 3.6V\n");
 				#else
-				SEGGER_RTT_WriteString(0, "\r\t- '5' IANA219			(0x00--0x31): 1.95V -- 3.6V (compiled out) \n");
+				SEGGER_RTT_WriteString(0, "\r\t- '5' INA219			(0x00--0x31): 1.95V -- 3.6V (compiled out) \n");
 #endif
 				OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 
@@ -1743,7 +1746,7 @@ main(void)
 						break;
 					}
 #endif
-#ifdef WARP_BUILD_ENABLE_DEVIANA219
+#ifdef WARP_BUILD_ENABLE_DEVINA219
 /* TODO
 					case '5':
 					{
@@ -2489,6 +2492,15 @@ main(void)
 
 
 			/*
+			 *	Measure current
+			 */
+			case 'w':
+			{
+				printCurrentINA219();
+				break;
+			}
+			
+			/*
 			 *	Ignore naked returns.
 			 */
 			case '\n':
@@ -2533,8 +2545,8 @@ printAllSensors(bool printHeadersAndCalibration, bool hexModeFlag, int menuDelay
 					i2cPullupValue
 					);
 	#endif
-	#ifdef WARP_BUILD_ENABLE_DEVIANA219
-	numberOfConfigErrors += configureSensorIANA219();
+	#ifdef WARP_BUILD_ENABLE_DEVINA219
+	numberOfConfigErrors += configureSensorINA219();
 	#endif
 	#ifdef WARP_BUILD_ENABLE_DEVMAG3110
 	numberOfConfigErrors += configureSensorMAG3110(	0x00,/*	Payload: DR 000, OS 00, 80Hz, ADC 1280, Full 16bit, standby mode to set up register*/
@@ -2631,8 +2643,8 @@ printAllSensors(bool printHeadersAndCalibration, bool hexModeFlag, int menuDelay
 		SEGGER_RTT_WriteString(0, " MMA8451 x, MMA8451 y, MMA8451 z,");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 		#endif
-		#ifdef WARP_BUILD_ENABLE_DEVIANA219
-		SEGGER_RTT_WriteString(0, " IANA219 current,");
+		#ifdef WARP_BUILD_ENABLE_DEVINA219
+		SEGGER_RTT_WriteString(0, " INA219 current,");
 		OSA_TimeDelay(gWarpMenuPrintDelayMilliseconds);
 		#endif
 		#ifdef WARP_BUILD_ENABLE_DEVMAG3110
