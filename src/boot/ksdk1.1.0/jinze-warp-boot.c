@@ -55,16 +55,13 @@
 #include "SEGGER_RTT.h"
 #include "warp.h"
 
-#include "devINA219.h"
-#include "devSSD1331.h"
-
 #define WARP_FRDMKL03
 
 /*
 *	Comment out the header file to disable devices
 */
 #ifndef WARP_FRDMKL03
-/*#	include "devBMX055.h"
+#	include "devBMX055.h"
 #	include "devMMA8451Q.h"
 #	include "devHDC1000.h"
 #	include "devMAG3110.h"
@@ -72,7 +69,7 @@
 #	include "devBME680.h"
 #	include "devCCS811.h"
 #	include "devAMG8834.h"
-#	include "devSSD1331.h"*/
+#	include "devSSD1331.h"
 //#include "devTCS34725.h"
 //#include "devSI4705.h"
 //#include "devSI7021.h"
@@ -85,6 +82,8 @@
 #else
 //	#include "devMMA8451Q.h"
 #endif
+
+#include "devINA219.h"
 
 #define WARP_BUILD_ENABLE_SEGGER_RTT_PRINTF
 //#define WARP_BUILD_BOOT_TO_CSVSTREAM
@@ -101,8 +100,6 @@
 #define						kWarpConstantStringErrorSanity		"\rSanity check failed!"
 
 
-volatile WarpI2CDeviceState			deviceINA219State;
-
 #ifdef WARP_BUILD_ENABLE_DEVADXL362
 volatile WarpSPIDeviceState			deviceADXL362State;
 #endif
@@ -116,6 +113,8 @@ volatile WarpI2CDeviceState			deviceBMX055magState;
 #ifdef WARP_BUILD_ENABLE_DEVMMA8451Q
 volatile WarpI2CDeviceState			deviceMMA8451QState;
 #endif
+
+volatile WarpI2CDeviceState			deviceINA219State;
 
 #ifdef WARP_BUILD_ENABLE_DEVLPS25H
 volatile WarpI2CDeviceState			deviceLPS25HState;
