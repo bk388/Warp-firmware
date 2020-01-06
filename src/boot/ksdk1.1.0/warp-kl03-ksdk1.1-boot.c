@@ -63,6 +63,7 @@
 *	BTstack includes WIP
 */
 // #include "btstack_main.h"
+#include "sens3D.h"
 
 
 #define						kWarpConstantStringI2cFailure		"\rI2C failed, reg 0x%02x, code %d\n"
@@ -71,6 +72,8 @@
 
 
 volatile WarpI2CDeviceState			deviceINA219State;
+volatile WarpI2CDeviceState			deviceTCA9548AState;
+volatile WarpI2CDeviceState			deviceVL53L0XState;
 
 
 /*
@@ -914,57 +917,78 @@ checkSum(uint8_t *  pointer, uint16_t length) /*	Adapted from https://stackoverf
 }
 #endif
 
-
-/* Modified function of loopForSensor for INA219 only */
-void readCurrentLoop(volatile WarpI2CDeviceState *  i2cDeviceState, int  spinDelay)
+inline i2c_status_t
+sendI2CByte(i2c_device_t *slave, uint8_t index, uint8_t data)
 {
-	WarpStatus		status;
-	int			nSuccesses = 0;
-	int			nFailures = 0;
-	int			nCorrects = 0;
-	int			nBadCommands = 0;
-
-	OSA_TimeDelay(100);
-
-	/* calibrate & configure the INA219	*
-	 * Scaling: 50 uA per step		*/
-	writeSensorRegisterINA219(0x05, 8192);
-	writeSensorRegisterINA219(0x00, 0x019f);
-
-	for (int i = 0; i < 1000; i++)
-	{
-		writeSensorRegisterINA219(0x05, 8192);
-		status = readSensorRegisterINA219(0x04, 2 /* numberOfBytes */);
-		if (status == kWarpStatusOK)
-		{
-			nSuccesses++;
-			int val = ((i2cDeviceState->i2cBuffer[0] << 8) | i2cDeviceState->i2cBuffer[1]);
-			SEGGER_RTT_printf(0, "\r%d\n", val);
-			OSA_TimeDelay(10);
-		}
-		else if (status == kWarpStatusDeviceCommunicationFailed)
-		{
-			SEGGER_RTT_printf(0, "\r----\n");
-			nFailures++;
-		}
-		else if (status == kWarpStatusBadDeviceCommand)
-		{
-			nBadCommands++;
-		}
-
-		if (spinDelay > 0)
-		{
-			OSA_TimeDelay(spinDelay);
-		}
-	}
-
-	SEGGER_RTT_printf(0, "\r\n\t%d/%d success rate.\n", nSuccesses, (nSuccesses + nFailures));
-	OSA_TimeDelay(50);
-	SEGGER_RTT_printf(0, "\r\t%d bad commands.\n\n", nBadCommands);
-	OSA_TimeDelay(50);
-	return;
+	return I2C_DRV_MasterSendDataBlocking(0, slave, &index, 1, &data, 1, 100);
 }
 
+inline i2c_status_t
+readI2CByte(i2c_device_t *slave, uint8_t index, uint8_t *data)
+{
+	return I2C_DRV_MasterReceiveDataBlocking(0, slave, &index, 1, data, 1, 500);
+}
+
+//FIXME
+uint8_t stopVariable = 0x00;
+uint16_t
+readToFRange()
+{
+	uint8_t onebyte = 0x01;
+	int counter = 0;
+	uint16_t rangeMillimeter = 0;
+	uint8_t commandByte[1] = {0x00};
+	uint8_t payloadByte[1] = {0x00};
+	i2c_status_t status;
+	i2c_device_t slave =
+	{
+		.address = deviceVL53L0XState.i2cAddress,
+		.baudRate_kbps = gWarpI2cBaudRateKbps
+	};
+	// device mode: single ranging
+
+	/* start measurement */
+	status = sendI2CByte(&slave, 0x80, 0x01);
+	status = sendI2CByte(&slave, 0xFF, 0x01);
+	status = sendI2CByte(&slave, 0x00, 0x00);
+	status = sendI2CByte(&slave, 0x91, stopVariable);
+	status = sendI2CByte(&slave, 0x00, 0x01);
+	status = sendI2CByte(&slave, 0xFF, 0x00);
+	status = sendI2CByte(&slave, 0x80, 0x00);
+
+	sendI2CByte(&slave, 0x00, 0x01);
+
+	do {
+		if (counter > 0)
+			readI2CByte(&slave, 0x00, &onebyte);
+		counter ++;
+	} while ( ((onebyte & 0x01) == 0x01) && (counter < 200) );
+
+	/* poll for completion */
+	counter = 0;
+	while (counter < 200) {
+		int i;
+		
+		readI2CByte(&slave, 0x14, &onebyte);
+		if ((onebyte & 0x01) == 0x01)
+			break;
+
+		for(i=0;i<256;i++) {
+			asm("nop");
+		}
+	}
+	if ((onebyte & 0x01) != 0x01)
+		SEGGER_RTT_printf(0, "Uh-Oh");
+
+	uint8_t data[12];
+	uint8_t index = 0x14;
+	I2C_DRV_MasterReceiveDataBlocking(0, &slave, &index, 1, data, 12, 500);
+	uint16_t range = ((data[10] << 8) & 0xff00) | (data[11] & 0x00ff);
+	status = sendI2CByte(&slave, 0x0B, 0x01);
+	status = sendI2CByte(&slave, 0x0B, 0x00);
+
+	return range;
+}
 
 int
 main(void)
@@ -1184,77 +1208,11 @@ main(void)
 	/*
 	 *	Initialize all the sensors
 	 */
-#ifdef WARP_BUILD_ENABLE_DEVBMX055
-	initBMX055accel(0x18	/* i2cAddress */,	&deviceBMX055accelState	);
-	initBMX055gyro(	0x68	/* i2cAddress */,	&deviceBMX055gyroState	);
-	initBMX055mag(	0x10	/* i2cAddress */,	&deviceBMX055magState	);
-#endif
-
 	//initINA219(	0x40	/* i2cAddress */,	&deviceINA219State	);
-
-#ifdef WARP_BUILD_ENABLE_DEVLPS25H
-	initLPS25H(	0x5C	/* i2cAddress */,	&deviceLPS25HState	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVHDC1000
-	initHDC1000(	0x43	/* i2cAddress */,	&deviceHDC1000State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVMAG3110	
-	initMAG3110(	0x0E	/* i2cAddress */,	&deviceMAG3110State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVSI7021
-	initSI7021(	0x40	/* i2cAddress */,	&deviceSI7021State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVL3GD20H
-	initL3GD20H(	0x6A	/* i2cAddress */,	&deviceL3GD20HState	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVBME680
-	initBME680(	0x77	/* i2cAddress */,	&deviceBME680State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVTCS34725
-	initTCS34725(	0x29	/* i2cAddress */,	&deviceTCS34725State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVSI4705
-	initSI4705(	0x11	/* i2cAddress */,	&deviceSI4705State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVCCS811
-	initCCS811(	0x5A	/* i2cAddress */,	&deviceCCS811State	);
-#endif
+	//FIXME
+	deviceTCA9548AState.i2cAddress = 0x70;
+	deviceVL53L0XState.i2cAddress = 0x29;
 	
-#ifdef WARP_BUILD_ENABLE_DEVAMG8834
-	initAMG8834(	0x68	/* i2cAddress */,	&deviceAMG8834State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVAS7262
-	initAS7262(	0x49	/* i2cAddress */,	&deviceAS7262State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVAS7263
-	initAS7263(	0x49	/* i2cAddress */,	&deviceAS7263State	);
-#endif
-
-#ifdef WARP_BUILD_ENABLE_DEVRV8803C7
-  initRV8803C7(0x32 /* i2cAddress */, &deviceRV8803C7State);
-  enableI2Cpins(menuI2cPullupValue);
-  setRTCCountdownRV8803C7(0, TD_1HZ, false);
-  disableI2Cpins();
-#endif
-
-	/*
-	 *	Initialization: Devices hanging off SPI
-	 */
-#ifdef WARP_BUILD_ENABLE_DEVADXL362
-	initADXL362(&deviceADXL362State);
-#endif
-
-
 	/*
 	 *	Initialization: the PAN1326, generating its 32k clock
 	 */
@@ -1276,14 +1234,79 @@ main(void)
 	 *	TODO: initialize the kWarpPinKL03_VDD_ADC, write routines to read the VDD and temperature
 	 */
 
-	// Turn on OLED
-	devSSD1331init();
 	OSA_TimeDelay(1000);
 
 	// Measure Current
 	enableI2Cpins(menuI2cPullupValue);
 
-	//readCurrentLoop(&deviceINA219State, 0);
+//FIXME	
+	uint8_t commandByte[1] = {1};
+	i2c_status_t status;
+	
+	i2c_device_t slave =
+	{
+		.address = deviceTCA9548AState.i2cAddress,
+		.baudRate_kbps = gWarpI2cBaudRateKbps
+	};
+	status = I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
+	if (status == kStatus_I2C_Success)
+		SEGGER_RTT_printf(0, "\rDevice initialized\n");
+	
+	slave.address = deviceVL53L0XState.i2cAddress;
+	status = sendI2CByte(&slave, 0x80, 0x01);
+	status = sendI2CByte(&slave, 0xFF, 0x01);
+	status = sendI2CByte(&slave, 0x00, 0x00);
+	status = readI2CByte(&slave, 0x91, &stopVariable);
+	status = sendI2CByte(&slave, 0x00, 0x01);
+	status = sendI2CByte(&slave, 0xFF, 0x00);
+	status = sendI2CByte(&slave, 0x80, 0x00);
+
+	while(1) {
+		uint32_t rangeAvg = 0;
+		vect3d vecA, vecB, vecC;
+		for(int j=0;j<8;j++) {
+			rangeAvg += readToFRange() & 0x0000ffff;
+		}
+		rangeAvg >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		vecA.i = SENS0X;
+		vecA.j = SENS0Y;
+		vecA.k = (int)rangeAvg;
+		SEGGER_RTT_printf(0, "\r%d\n", vecA.k);
+
+		slave.address = deviceVL53L0XState.i2cAddress;
+		commandByte[0] = 1<<1;
+		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
+		rangeAvg = 0;
+		for(int j=0;j<8;j++) {
+			rangeAvg += readToFRange() & 0x0000ffff;
+		}
+		rangeAvg >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		
+		commandByte[0] = 1<<7;
+		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
+		rangeAvg = 0;
+		for(int j=0;j<8;j++) {
+			rangeAvg += readToFRange() & 0x0000ffff;
+		}
+		rangeAvg >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		
+		commandByte[0] = 1<<6;
+		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
+		rangeAvg = 0;
+		for(int j=0;j<8;j++) {
+			rangeAvg += readToFRange() & 0x0000ffff;
+		}
+		rangeAvg >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		
+		
+		for(int i=0;i<10000;i++) {
+			asm("nop");
+		}
+	}
 
 	return 0;
 }
