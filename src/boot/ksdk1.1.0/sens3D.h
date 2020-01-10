@@ -21,6 +21,9 @@
 #define SENS3X		30
 #define SENS3Y		(-21)
 
+#define M123X		0
+#define M123Y		(-3)
+
 typedef struct {
 	int i;
 	int j;
@@ -43,8 +46,8 @@ int vect3dabs2(vect3d *v)
 
 struct surf3D {
 	int curvature;
-	int angle_z;
-	int angle_x;
+	vect3d normal;
+	int distance;
 };
 
 //void initSens3D(const uint8_t i2cAddress, WarpI2CDeviceState volatile *TCA9548AdeviceState);

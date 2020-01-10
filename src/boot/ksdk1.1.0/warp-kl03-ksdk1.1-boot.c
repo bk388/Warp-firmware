@@ -1262,67 +1262,79 @@ main(void)
 	status = sendI2CByte(&slave, 0x80, 0x00);
 
 	while(1) {
-		uint32_t rangeAvg;
-		vect3d vecA, vecB, vecC, vecNAB, vecNAC, vecNxN;
+		uint32_t rangeA, rangeB, rangeC, rangeD;
+		int surfCurv;
+		vect3d vecCB, vecCD, posMBCD, vecMA, vecNBCD;
+		
+		rangeA = 0;
+		rangeB = 0;
+		rangeC = 0;
+		rangeD = 0;
 		
 		slave.address = deviceTCA9548AState.i2cAddress;
+		/* Read ranges */
 		commandByte[0] = 1<<SENS0ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		rangeAvg = 0;
 		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
-			rangeAvg += (uint32_t)readToFRange() & 0x0000ffff;
-			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeAvg);
+			rangeA += (uint32_t)readToFRange() & 0x0000ffff;
+			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeA);
 		}
-		rangeAvg >>= 3; // divide by 8
-		vecA.k = (int)rangeAvg;
-		vecB.k = (int)rangeAvg;
-		vecC.k = (int)rangeAvg;
-		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
-
+		rangeA >>= 3; // divide by 8
+		
 		commandByte[0] = 1<<SENS1ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		rangeAvg = 0;
+		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
-			rangeAvg += readToFRange() & 0x0000ffff;
+			rangeB += (uint32_t)readToFRange() & 0x0000ffff;
+			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeB);
 		}
-		rangeAvg >>= 3; // divide by 8
-		vecA.i = SENS1X - SENS0X;
-		vecA.j = SENS1Y - SENS0Y;
-		vecA.k = (int)rangeAvg - vecA.k;
-		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		rangeB >>= 3; // divide by 8
 		
 		commandByte[0] = 1<<SENS2ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		rangeAvg = 0;
+		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
-			rangeAvg += readToFRange() & 0x0000ffff;
+			rangeC += (uint32_t)readToFRange() & 0x0000ffff;
+			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeC);
 		}
-		rangeAvg >>= 3; // divide by 8
-		vecB.i = SENS2X - SENS0X;
-		vecB.j = SENS2Y - SENS0Y;
-		vecB.k = (int)rangeAvg - vecB.k;
-		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		rangeC >>= 3; // divide by 8
 		
 		commandByte[0] = 1<<SENS3ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		rangeAvg = 0;
+		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
-			rangeAvg += readToFRange() & 0x0000ffff;
+			rangeD += (uint32_t)readToFRange() & 0x0000ffff;
+			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeD);
 		}
-		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
-		rangeAvg >>= 3; // divide by 8
-		vecC.i = SENS3X - SENS0X;
-		vecC.j = SENS3Y - SENS0Y;
-		vecC.k = (int)rangeAvg - vecC.k;
-		SEGGER_RTT_printf(0, "\r0x%04x\n", rangeAvg);
+		rangeD >>= 3; // divide by 8
 		
-		crossprod(&vecA, &vecB, &vecNAB);
-		crossprod(&vecA, &vecC, &vecNAC);
-		crossprod(&vecNAB, &vecNAC, &vecNxN);
-		SEGGER_RTT_printf(0, "\r\t%d\n", vecNxN.k);
-		//vect3dabs2(&vecNxN);
-		SEGGER_RTT_printf(0, "\r\t%d\n", vect3dabs2(&vecNxN));
+		/* Calculate normal vector of the ABC triangle */
+		vecCB.i = SENS1X - SEN2X;
+		vecCD.i = SENS3X - SEN2X;
+		vecCB.j = SENS1Y - SEN2Y;
+		vecCD.j = SENS3Y - SEN2Y;
+		vecCB.k = rangeB - rangeC;
+		vecCD.k = rangeD - rangeC;
+		crossprod(&vecCD, &vecCB, &vecNBCD);
+
+		/* calculate curvature (some measure for it ... - CAREFUL NOT UNIT VECTORS) */
+		posMBCD.i = M123X;
+		posMBCD.j = M123Y;
+		posMBCD.k = (rangeB + rangeC + rangeD) / 3;
+		vecMA.i = SENS0X - posMBCD.i;
+		vecMA.j = SENS0Y - posMBCD.j;
+		vecMA.k = rangeA - posMBCD.k;
+		surfCurv = vecMA.i * vecNBCD.i + vecMA.j * vecNBCD.j + vecMA.k * vecNBCD.k;
+
+		if (posMBCD.k < rangeA) {
+			SEGGER_RTT_printf(0, "\r\tdistance:\t%d\n", posMBCD.k);
+		} else {
+			SEGGER_RTT_printf(0, "\r\tdistance:\t%d\n", rangeA);
+		}
+
+		SEGGER_RTT_printf(0, "\r\tnormal:\t[%d, %d, %d]\n", vecNBCD.i, vecNBCD.j, vecNBCD.k);
+		SEGGER_RTT_printf(0, "\r\tcurvature:\t%d\n", surfCurv);
 		
 		for(int i=0;i<10000;i++) {
 			asm("nop");
