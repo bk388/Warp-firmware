@@ -1275,39 +1275,35 @@ main(void)
 		/* Read ranges */
 		commandByte[0] = 1<<SENS0ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
 			rangeA += (uint32_t)readToFRange() & 0x0000ffff;
-			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeA);
 		}
 		rangeA >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r%d\n", rangeA);
 		
 		commandByte[0] = 1<<SENS1ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
 			rangeB += (uint32_t)readToFRange() & 0x0000ffff;
-			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeB);
 		}
 		rangeB >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r%d\n", rangeB);
 		
 		commandByte[0] = 1<<SENS2ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
 			rangeC += (uint32_t)readToFRange() & 0x0000ffff;
-			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeC);
 		}
 		rangeC >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r%d\n", rangeC);
 		
 		commandByte[0] = 1<<SENS3ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
-		SEGGER_RTT_printf(0, "\r0x%04x\n", readToFRange());
 		for(int j=0;j<8;j++) {
 			rangeD += (uint32_t)readToFRange() & 0x0000ffff;
-			SEGGER_RTT_printf(0, "\r0x%08x\n", rangeD);
 		}
 		rangeD >>= 3; // divide by 8
+		SEGGER_RTT_printf(0, "\r%d\n", rangeD);
 		
 		/* Calculate normal vector of the ABC triangle */
 		vecCB.i = SENS1X - SENS2X;
@@ -1336,7 +1332,7 @@ main(void)
 		SEGGER_RTT_printf(0, "\r\tnormal:\t[%d, %d, %d]\n", vecNBCD.i, vecNBCD.j, vecNBCD.k);
 		SEGGER_RTT_printf(0, "\r\tcurvature:\t%d\n", surfCurv);
 		
-		for(int i=0;i<10000;i++) {
+		for(int i=0;i<100000;i++) {
 			asm("nop");
 		}
 	}
