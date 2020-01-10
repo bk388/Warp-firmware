@@ -1310,10 +1310,10 @@ main(void)
 		rangeD >>= 3; // divide by 8
 		
 		/* Calculate normal vector of the ABC triangle */
-		vecCB.i = SENS1X - SEN2X;
-		vecCD.i = SENS3X - SEN2X;
-		vecCB.j = SENS1Y - SEN2Y;
-		vecCD.j = SENS3Y - SEN2Y;
+		vecCB.i = SENS1X - SENS2X;
+		vecCD.i = SENS3X - SENS2X;
+		vecCB.j = SENS1Y - SENS2Y;
+		vecCD.j = SENS3Y - SENS2Y;
 		vecCB.k = rangeB - rangeC;
 		vecCD.k = rangeD - rangeC;
 		crossprod(&vecCD, &vecCB, &vecNBCD);
