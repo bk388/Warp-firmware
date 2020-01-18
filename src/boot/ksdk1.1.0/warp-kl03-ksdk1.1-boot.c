@@ -64,6 +64,7 @@
 */
 // #include "btstack_main.h"
 #include "sens3D.h"
+#include "devINA219.h"
 
 
 #define						kWarpConstantStringI2cFailure		"\rI2C failed, reg 0x%02x, code %d\n"
@@ -74,7 +75,6 @@
 volatile WarpI2CDeviceState			deviceINA219State;
 volatile WarpI2CDeviceState			deviceTCA9548AState;
 volatile WarpI2CDeviceState			deviceVL53L0XState;
-
 
 /*
  *	TODO: move this and possibly others into a global structure
@@ -1015,7 +1015,7 @@ readToFRange()
 	} while ( ((onebyte & 0x01) == 0x01) && (counter < 200) );
 
 	/* poll for completion */
-	readCurrentLoop()
+	readCurrentLoop(&deviceINA219State, 0);
 	counter = 0;
 	while (counter < 200) {
 		int i;
@@ -1259,7 +1259,7 @@ main(void)
 	/*
 	 *	Initialize all the sensors
 	 */
-	//initINA219(	0x40	/* i2cAddress */,	&deviceINA219State	);
+	initINA219(	0x40	/* i2cAddress */,	&deviceINA219State	);
 	//FIXME
 	deviceTCA9548AState.i2cAddress = 0x70;
 	deviceVL53L0XState.i2cAddress = 0x29;
