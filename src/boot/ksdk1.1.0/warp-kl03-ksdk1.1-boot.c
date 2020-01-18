@@ -930,6 +930,56 @@ readI2CByte(i2c_device_t *slave, uint8_t index, uint8_t *data)
 }
 
 //FIXME
+void readCurrentLoop(volatile WarpI2CDeviceState *  i2cDeviceState, int  spinDelay)
+{
+        WarpStatus              status;
+        int                     nSuccesses = 0; 
+        int                     nFailures = 0; 
+        int                     nCorrects = 0; 
+        int                     nBadCommands = 0; 
+
+        OSA_TimeDelay(100);
+
+        /* calibrate & configure the INA219     *
+         * Scaling: 50 uA per step              */
+        writeSensorRegisterINA219(0x05, 8192);
+        writeSensorRegisterINA219(0x00, 0x019f);
+
+        for (int i = 0; i < 1000; i++) 
+        {    
+                writeSensorRegisterINA219(0x05, 8192);
+                status = readSensorRegisterINA219(0x04, 2 /* numberOfBytes */);
+                if (status == kWarpStatusOK)
+                {    
+                        nSuccesses++;
+                        int val = ((i2cDeviceState->i2cBuffer[0] << 8) | i2cDeviceState->i2cBuffer[1]);
+                        SEGGER_RTT_printf(0, "\r%d\n", val);
+                        OSA_TimeDelay(10);
+                }    
+                else if (status == kWarpStatusDeviceCommunicationFailed)
+                {    
+                        SEGGER_RTT_printf(0, "\r----\n");
+                        nFailures++;
+                }    
+                else if (status == kWarpStatusBadDeviceCommand)
+                {    
+                        nBadCommands++;
+                }    
+
+                if (spinDelay > 0) 
+                {    
+                        OSA_TimeDelay(spinDelay);
+                }    
+        }    
+
+        SEGGER_RTT_printf(0, "\r\n\t%d/%d success rate.\n", nSuccesses, (nSuccesses + nFailures));                   
+        OSA_TimeDelay(50);
+        SEGGER_RTT_printf(0, "\r\t%d bad commands.\n\n", nBadCommands);
+        OSA_TimeDelay(50);
+        return;
+}
+
+
 uint8_t stopVariable = 0x00;
 uint16_t
 readToFRange()
@@ -965,6 +1015,7 @@ readToFRange()
 	} while ( ((onebyte & 0x01) == 0x01) && (counter < 200) );
 
 	/* poll for completion */
+	readCurrentLoop()
 	counter = 0;
 	while (counter < 200) {
 		int i;
