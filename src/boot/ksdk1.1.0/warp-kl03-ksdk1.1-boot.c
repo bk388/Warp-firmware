@@ -1260,6 +1260,8 @@ main(void)
 	status = sendI2CByte(&slave, 0x00, 0x01);
 	status = sendI2CByte(&slave, 0xFF, 0x00);
 	status = sendI2CByte(&slave, 0x80, 0x00);
+		
+	SEGGER_RTT_printf(0, "\rStarting measurement\n");
 
 	while(1) {
 		uint32_t rangeA, rangeB, rangeC, rangeD;
@@ -1279,7 +1281,7 @@ main(void)
 			rangeA += (uint32_t)readToFRange() & 0x0000ffff;
 		}
 		rangeA >>= 3; // divide by 8
-		SEGGER_RTT_printf(0, "\r%d\n", rangeA);
+//		SEGGER_RTT_printf(0, "\r%d\n", rangeA);
 		
 		commandByte[0] = 1<<SENS1ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
@@ -1287,7 +1289,7 @@ main(void)
 			rangeB += (uint32_t)readToFRange() & 0x0000ffff;
 		}
 		rangeB >>= 3; // divide by 8
-		SEGGER_RTT_printf(0, "\r%d\n", rangeB);
+//		SEGGER_RTT_printf(0, "\r%d\n", rangeB);
 		
 		commandByte[0] = 1<<SENS2ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
@@ -1295,7 +1297,7 @@ main(void)
 			rangeC += (uint32_t)readToFRange() & 0x0000ffff;
 		}
 		rangeC >>= 3; // divide by 8
-		SEGGER_RTT_printf(0, "\r%d\n", rangeC);
+//		SEGGER_RTT_printf(0, "\r%d\n", rangeC);
 		
 		commandByte[0] = 1<<SENS3ADDR;
 		I2C_DRV_MasterSendDataBlocking(0, &slave, commandByte, 1, NULL, 0, 100);
@@ -1303,7 +1305,8 @@ main(void)
 			rangeD += (uint32_t)readToFRange() & 0x0000ffff;
 		}
 		rangeD >>= 3; // divide by 8
-		SEGGER_RTT_printf(0, "\r%d\n", rangeD);
+//		SEGGER_RTT_printf(0, "\r%d\n", rangeD);
+		SEGGER_RTT_printf(0, "\r[%d, %d, %d, %d]\n", rangeA, rangeB, rangeC, rangeD);
 		
 		/* Calculate normal vector of the ABC triangle */
 		vecCB.i = SENS1X - SENS2X;
@@ -1323,16 +1326,16 @@ main(void)
 		vecMA.k = rangeA - posMBCD.k;
 		surfCurv = vecMA.i * vecNBCD.i + vecMA.j * vecNBCD.j + vecMA.k * vecNBCD.k;
 
-		if (posMBCD.k < rangeA) {
+/*		if (posMBCD.k < rangeA) {
 			SEGGER_RTT_printf(0, "\r\tdistance:\t%d\n", posMBCD.k);
 		} else {
 			SEGGER_RTT_printf(0, "\r\tdistance:\t%d\n", rangeA);
 		}
-
-		SEGGER_RTT_printf(0, "\r\tnormal:\t[%d, %d, %d]\n", vecNBCD.i, vecNBCD.j, vecNBCD.k);
-		SEGGER_RTT_printf(0, "\r\tcurvature:\t%d\n", surfCurv);
+*/
+//		SEGGER_RTT_printf(0, "\r\tnormal:\t[%d, %d, %d]\n", vecNBCD.i, vecNBCD.j, vecNBCD.k);
+//		SEGGER_RTT_printf(0, "\r\tcurvature:\t%d\n", surfCurv);
 		
-		for(int i=0;i<100000;i++) {
+		for(int i=0;i<1000;i++) {
 			asm("nop");
 		}
 	}
